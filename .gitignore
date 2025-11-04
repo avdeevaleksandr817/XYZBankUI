@@ -1,0 +1,47 @@
+### Build ###
+build/
+out/
+target/
+dist/
+nbdist/
+.nbbuild/
+.gradle/
+!.gradle/wrapper/gradle-wrapper.jar
+
+### IDE ###
+# IntelliJ IDEA
+.idea/
+*.iws
+*.iml
+*.ipr
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# Eclipse
+.classpath
+.project
+.settings/
+bin/
+
+# NetBeans
+/nbproject/private/
+
+# VS Code
+.vscode/
+
+### Logs ###
+*.log
+logs/
+
+### Reports ###
+allure-results/
+allure-report/
+
+### OS ###
+.DS_Store
+
+### Dependencies ###
+chromedriver*
+chromedriver-win64.zip
+chromedriver-linux64.zip
+chromedriver-mac64.zip
