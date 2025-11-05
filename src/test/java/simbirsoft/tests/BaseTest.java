@@ -5,22 +5,19 @@ import org.junit.jupiter.api.*;
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import java.time.Duration;
-import org.junit.jupiter.api.*;
-import org.openqa.selenium.*;
-import org.openqa.selenium.support.ui.*;
-import simbirsoft.pages.CustomersPage;
 import simbirsoft.pages.ManagerPage;
-
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.TestMethodOrder;
+import simbirsoft.pages.CustomersPage;
 
 /**
- * Базовый тестовый класс с настройкой драйвера и общими методами
+ * Базовый класс для тестов.
+ * Настраивает WebDriver и предоставляет общие методы.
  */
 @TestMethodOrder(MethodOrderer.Alphanumeric.class)
 public class BaseTest {
+
     protected WebDriver driver;
     protected WebDriverWait wait;
     protected ManagerPage managerPage;
@@ -42,25 +39,24 @@ public class BaseTest {
     void setUpEach() {
         System.out.println("✅ Тест запущен в потоке: " + Thread.currentThread().getName() +
                 ", PID: " + ProcessHandle.current().pid());
-        // WebDriverManager — можно вызывать один раз, но безопасно и здесь
+
         WebDriverManager.chromedriver().setup();
 
         ChromeOptions options = new ChromeOptions();
         options.addArguments("--headless=new");
+        options.addArguments("--disable-gpu", "--no-sandbox", "--disable-dev-shm-usage");
+        options.addArguments("--window-size=1920,1080");
 
         driver = new ChromeDriver(options);
-        driver.manage().window().maximize();
         driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10));
-
         wait = new WebDriverWait(driver, Duration.ofSeconds(20));
 
         managerPage = new ManagerPage(driver);
         customersPage = new CustomersPage(driver);
 
-        // Переход на главную
         driver.get(BASE_URL);
-        JavascriptExecutor js = (JavascriptExecutor) driver;
-        wait.until(d -> js.executeScript("return document.readyState").equals("complete"));
+        wait.until(d -> ((JavascriptExecutor) d).executeScript("return document.readyState")
+                .equals("complete"));
 
         By managerLoginLocator = By.xpath("//button[contains(., 'Bank Manager Login')]");
         WebElement managerLoginBtn = wait.until(ExpectedConditions.elementToBeClickable(managerLoginLocator));
@@ -68,7 +64,6 @@ public class BaseTest {
 
         wait.until(d -> d.getCurrentUrl().contains("/manager"));
         System.out.println("✅ Кликнули 'Bank Manager Login', перешли на /manager");
-
     }
 
     @AfterEach
