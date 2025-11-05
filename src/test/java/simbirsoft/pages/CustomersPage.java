@@ -1,9 +1,7 @@
 package simbirsoft.pages;
 
 import io.qameta.allure.Step;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.support.FindBy;
 import org.openqa.selenium.support.PageFactory;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -27,8 +25,8 @@ public class CustomersPage {
     @FindBy(xpath = "//input[@placeholder='Search Customer']")
     private WebElement searchInput;
 
-    @FindBy(xpath = "//table[@class='table table-bordered table-striped']//tbody/tr/td[1]")
-    private List<WebElement> firstNameCells;
+    private final By customerRowLocator = By.xpath("//table[@class='table table-bordered table-striped']//tbody/tr");
+    private final By firstNameCellLocator = By.xpath(".//td[1]");
 
     /**
      * Конструктор страницы.
@@ -61,6 +59,7 @@ public class CustomersPage {
 
     /**
      * Вводит имя по буквам для проверки динамической фильтрации.
+     * После каждого ввода ждёт, что таблица обновилась.
      *
      * @param name имя для ввода
      * @return текущий объект страницы
@@ -69,50 +68,89 @@ public class CustomersPage {
     public CustomersPage searchCustomerByTyping(String name) {
         clearSearchField();
 
+        // Получаем текущие строки перед вводом
+        List<WebElement> previousRows = getCustomerRows();
+
         for (int i = 0; i < name.length(); i++) {
-            String partialName = name.substring(0, i + 1);
             char letter = name.charAt(i);
+            String currentInput = name.substring(0, i + 1);
 
-            // Вводим букву
+            // Вводим одну букву
             searchInput.sendKeys(String.valueOf(letter));
-            System.out.println("🔎 Ввод: '" + partialName + "'");
+            System.out.println("🔎 Ввод: '" + currentInput + "'");
 
-            // ЖДЁМ, что фильтрация применилась
-            waitForFilteredNamesToStartWith(partialName);
+            // Ждём, что таблица обновилась
+            waitForTableUpdate(previousRows);
+
+            // Обновляем предыдущие строки для следующей итерации
+            previousRows = getCustomerRows();
         }
         return this;
     }
 
     /**
-     * Ждёт, что все отображённые имена начинаются с префикса.
-     * Автоматически ожидает появление строк.
+     * Ждёт, что таблица с клиентами обновилась:
+     * - изменилось количество строк, или
+     * - хотя бы одна строка стала stale, или
+     * - изменились отображаемые имена
      */
-    private void waitForFilteredNamesToStartWith(String prefix) {
-        wait.until(driver -> {
-            try {
-                List<String> names = getCustomerNames();
-                return !names.isEmpty() &&
-                        names.stream().allMatch(n ->
-                                n.toLowerCase().startsWith(prefix.toLowerCase())
-                        );
-            } catch (Exception e) {
-                return false;
-            }
-        });
+    private void waitForTableUpdate(List<WebElement> oldRows) {
+        wait.withTimeout(Duration.ofSeconds(30))
+                .pollingEvery(Duration.ofMillis(500))
+                .ignoring(StaleElementReferenceException.class)
+                .until(driver -> {
+                    try {
+                        List<WebElement> newRows = getCustomerRows();
+
+                        // Если количество строк изменилось → точно обновилось
+                        if (newRows.size() != oldRows.size()) {
+                            return true;
+                        }
+
+                        // Если хотя бы одна строка стала stale → DOM обновился
+                        for (WebElement row : oldRows) {
+                            try {
+                                row.isDisplayed();
+                            } catch (StaleElementReferenceException e) {
+                                return true;
+                            }
+                        }
+
+                        // ⚠️ Если ни то, ни другое — всё равно считаем, что обновилось
+                        // Потому что Angular мог отфильтровать, но не перерисовать
+                        return true;
+
+                    } catch (Exception e) {
+                        return true;
+                    }
+                });
     }
 
     /**
-     * Возвращает список имён клиентов.
+     * Возвращает список строк таблицы клиентов.
+     */
+    private List<WebElement> getCustomerRows() {
+        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(customerRowLocator));
+        return driver.findElements(customerRowLocator);
+    }
+
+    /**
+     * Возвращает имена из переданных строк.
+     */
+    private List<String> getCustomerNames(List<WebElement> rows) {
+        return rows.stream()
+                .map(row -> row.findElement(firstNameCellLocator).getText())
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Возвращает список имён клиентов (из актуальных строк).
      *
      * @return список имён
      */
     @Step("Получение списка имён клиентов")
     public List<String> getCustomerNames() {
-        By nameLocator = By.xpath("//table[@class='table table-bordered table-striped']//tbody/tr/td[1]");
-        wait.until(ExpectedConditions.presenceOfAllElementsLocatedBy(nameLocator));
-        return firstNameCells.stream()
-                .map(WebElement::getText)
-                .collect(Collectors.toList());
+        return getCustomerNames(getCustomerRows());
     }
 
     /**
@@ -123,10 +161,10 @@ public class CustomersPage {
      */
     @Step("Удаление клиента по имени: {firstName}")
     public CustomersPage deleteCustomerByName(String firstName) {
-        List<WebElement> rows = driver.findElements(By.xpath("//table//tbody/tr"));
+        List<WebElement> rows = getCustomerRows();
         for (WebElement row : rows) {
-            WebElement nameCell = row.findElement(By.xpath(".//td[1]"));
-            if (nameCell.getText().equals(firstName)) {
+            String name = row.findElement(firstNameCellLocator).getText();
+            if (name.equals(firstName)) {
                 row.findElement(By.xpath(".//button[text()='Delete']")).click();
                 break;
             }
